@@ -63,7 +63,7 @@ func NewPlayer(world *world.World, cfg PlayerConfig) *Player {
 	}
 }
 
-func (p *Player) Update(ctx common.WorldContext) {
+func (p *Player) Update(ctx common.WorldContext, delta float64) {
 	if p.isFalling {
 		return
 	}
@@ -79,10 +79,6 @@ func (p *Player) Update(ctx common.WorldContext) {
 	info, ok := p.world.GetSurfaceAt(z)
 	if ok {
 		p.groundY = info.Height
-		if info.Type == world.SurfaceLiquid {
-			p.isFalling = true
-			return
-		}
 		if info.Segment != nil {
 			p.currentSegment = info.Segment
 			p.standingRadius = info.Segment.Width() / 2
@@ -102,8 +98,8 @@ func (p *Player) Update(ctx common.WorldContext) {
 
 	// Прыжок
 	if p.isJumping {
-		p.jumpOffset += p.jumpVelocity
-		p.jumpVelocity -= p.physics.Gravity
+		p.jumpOffset += p.jumpVelocity * delta * 60
+		p.jumpVelocity -= p.physics.Gravity * delta * 60
 		if p.jumpOffset <= 0 {
 			p.jumpOffset = 0
 			p.isJumping = false
@@ -121,12 +117,12 @@ func (p *Player) Jump(initialVelocity float64) {
 	}
 }
 
-func (p *Player) ApplyBalanceInput(driftDir int) {
+func (p *Player) ApplyBalanceInput(driftDir int, delta float64) {
 	if p.isFalling {
 		return
 	}
-	delta := p.balanceSpeed * float64(driftDir)
-	p.balance += delta
+	deltaBalance := p.balanceSpeed * float64(driftDir) * delta * 60
+	p.balance += deltaBalance
 	if p.balance > p.maxBalance {
 		p.balance = p.maxBalance
 		p.isFalling = true

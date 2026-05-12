@@ -44,7 +44,7 @@ func NewGameState(manager *Manager, gameCfg config.GameConfig, cameraCfg config.
 	riverTexture := asset.LoadRiverTexture()
 
 	riverLayer := world.NewSegmentLayer(
-		0, -25, 2000, 100, 0.3, 20,
+		0, -25, 2000, 40, 0.3, 20,
 		0.0, 0.25,
 		color.RGBA{0, 100, 255, 255}, world.SurfaceLiquid,
 	)
@@ -100,10 +100,7 @@ func NewGameState(manager *Manager, gameCfg config.GameConfig, cameraCfg config.
 }
 
 func (g *GameState) Update() error {
-	delta := 1.0 / ebiten.ActualTPS()
-	if delta == 0 {
-		delta = 1.0 / 60
-	}
+	delta := 1.0 / 60.0
 	g.world.Update(delta)
 
 	if g.score >= g.gameConfig.DriftThreshold {
@@ -119,22 +116,18 @@ func (g *GameState) Update() error {
 	if g.score >= g.gameConfig.DriftThreshold {
 		effectiveDrift = g.driftDir
 	}
-	g.player.ApplyBalanceInput(effectiveDrift)
+	g.player.ApplyBalanceInput(effectiveDrift, delta)
 
 	if inpututil.IsKeyJustPressed(ebiten.KeyW) {
 		g.player.Jump(2.3)
 	}
 
-	g.player.Update(g.world)
+	g.player.Update(g.world, delta)
 
 	// Проверка столкновений с препятствиями
 
 	if !g.player.IsFalling() {
-		tps := ebiten.ActualTPS()
-		if tps == 0 {
-			tps = 60
-		}
-		g.score += 10.0 / tps
+		g.score += 10.0 / 60.0
 	} else {
 		gameOver := NewGameOverState(g.manager, g.score, g.gameConfig)
 		g.manager.ChangeState(gameOver, nil)

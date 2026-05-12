@@ -82,9 +82,6 @@ func NewMainMenuState(manager *Manager, gameCfg config.GameConfig) *MainMenuStat
 		fontBold:    fontBold,
 		titleFont:   titleFont,
 		windowTitle: "THE FIASKO.EXE",
-		version:     "Версия 1.0.4",
-		statusText:  "ГОТОВО",
-		statusHint:  "F1 — Справка | Enter — Выбор",
 		gameConfig:  gameCfg,
 	}
 

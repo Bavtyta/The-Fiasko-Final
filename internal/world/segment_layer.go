@@ -138,15 +138,35 @@ func NewSegmentLayer(baseX, baseY, width, segmentLength float64, parallaxFactor 
 // Update обновляет позиции сегментов и переставляет ушедшие за камеру.
 func (l *SegmentLayer) Update(ctx common.WorldContext, delta float64) {
 	effectiveSpeed := ctx.GetSpeed() * l.parallaxFactor
-	totalLength := l.segmentLength * float64(l.segmentCount)
+
+	// 1. Сдвигаем все сегменты в сторону камеры
 	for _, seg := range l.segments {
 		seg.Update(effectiveSpeed, delta)
 	}
 
-	// Переставляем первый сегмент только когда второй сегмент тоже ушёл за камеру
-	if len(l.segments) > 0 && l.segments[0].IsBehindCamera() {
+	// 2. Циклически переносим ушедшие за камеру сегменты в хвост очереди
+	const maxWraps = 10
+	for i := 0; i < maxWraps && len(l.segments) > 0; i++ {
 		first := l.segments[0]
-		first.Wrap(totalLength)
+		// Если задний край первого сегмента ещё впереди камеры (Z > 0) – выходим
+		if first.NearZ()+l.segmentLength > 0 {
+			break
+		}
+
+		last := l.segments[len(l.segments)-1]
+
+		// Новое положение первого сегмента – сразу за последним
+		newNearZ := last.NearZ() + l.segmentLength
+
+		// Вычисляем высоту стыка (базовую Y для непрерывности поверхности)
+		// При одинаковых наклонах можно просто last.BaseY(), но формула универсальна
+		heightAtStitch := last.BaseY() + last.SlopeY()*(last.NearZ()+l.segmentLength)
+		newBaseY := heightAtStitch - first.SlopeY()*newNearZ
+
+		first.SetNearZ(newNearZ)
+		first.SetBaseY(newBaseY)
+
+		// Сдвигаем очередь: убираем первый, добавляем в конец
 		l.segments = append(l.segments[1:], first)
 	}
 }
