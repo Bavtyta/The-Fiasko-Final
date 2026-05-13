@@ -63,7 +63,13 @@ func NewPlayer(world *world.World, cfg PlayerConfig) *Player {
 	}
 }
 
-func (p *Player) Update(ctx common.WorldContext, delta float64) {
+// Update реализует интерфейс Entity (только ctx), использует фиксированный delta = 1/60.
+func (p *Player) Update(ctx common.WorldContext) {
+	p.update(ctx, 1.0/60.0)
+}
+
+// Внутренний метод обновления с переданным delta.
+func (p *Player) update(ctx common.WorldContext, delta float64) {
 	if p.isFalling {
 		return
 	}
@@ -184,13 +190,10 @@ func (p *Player) Draw(screen *ebiten.Image, cam *render.Camera, ctx common.World
 	}
 
 	// Если есть текстура, рисуем с текстурой
-	// Выбираем текстуру в зависимости от состояния (прыжок или анимация ходьбы)
 	currentTex := p.texture
 	if p.isJumping && p.textureJump != nil {
-		// Если прыгаем, используем текстуру прыжка
 		currentTex = p.textureJump
 	} else if p.currentTexture == 1 && p.textureRight != nil {
-		// Иначе используем анимацию ходьбы
 		currentTex = p.textureRight
 	}
 
@@ -199,12 +202,11 @@ func (p *Player) Draw(screen *ebiten.Image, cam *render.Camera, ctx common.World
 		texW := float32(bounds.Dx())
 		texH := float32(bounds.Dy())
 
-		// Создаём вершины для двух треугольников (прямоугольник)
 		vertices := []ebiten.Vertex{
-			{DstX: float32(screenPts[0][0]), DstY: float32(screenPts[0][1]), SrcX: 0, SrcY: texH, ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1},    // левый нижний
-			{DstX: float32(screenPts[1][0]), DstY: float32(screenPts[1][1]), SrcX: texW, SrcY: texH, ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1}, // правый нижний
-			{DstX: float32(screenPts[3][0]), DstY: float32(screenPts[3][1]), SrcX: texW, SrcY: 0, ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1},    // правый верхний
-			{DstX: float32(screenPts[2][0]), DstY: float32(screenPts[2][1]), SrcX: 0, SrcY: 0, ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1},       // левый верхний
+			{DstX: float32(screenPts[0][0]), DstY: float32(screenPts[0][1]), SrcX: 0, SrcY: texH, ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1},
+			{DstX: float32(screenPts[1][0]), DstY: float32(screenPts[1][1]), SrcX: texW, SrcY: texH, ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1},
+			{DstX: float32(screenPts[3][0]), DstY: float32(screenPts[3][1]), SrcX: texW, SrcY: 0, ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1},
+			{DstX: float32(screenPts[2][0]), DstY: float32(screenPts[2][1]), SrcX: 0, SrcY: 0, ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1},
 		}
 		indices := []uint16{0, 1, 2, 0, 2, 3}
 		opts := &ebiten.DrawTrianglesOptions{
@@ -212,7 +214,6 @@ func (p *Player) Draw(screen *ebiten.Image, cam *render.Camera, ctx common.World
 		}
 		screen.DrawTriangles(vertices, indices, currentTex, opts)
 	} else {
-		// Рисуем контур (fallback)
 		col := p.color
 		ebitenutil.DrawLine(screen, screenPts[0][0], screenPts[0][1], screenPts[1][0], screenPts[1][1], col)
 		ebitenutil.DrawLine(screen, screenPts[1][0], screenPts[1][1], screenPts[3][0], screenPts[3][1], col)
@@ -222,7 +223,6 @@ func (p *Player) Draw(screen *ebiten.Image, cam *render.Camera, ctx common.World
 }
 
 // TiltedUpperWorldPos возвращает мировые координаты центра верхней грани после наклона.
-// Используется для привязки баланс-бара.
 func (p *Player) TiltedUpperWorldPos() core.Vec3 {
 	if p.isFalling {
 		return core.Vec3{}
@@ -238,7 +238,6 @@ func (p *Player) TiltedUpperWorldPos() core.Vec3 {
 	sinT := math.Sin(theta)
 
 	r := p.standingRadius
-	// центр верхней грани в локальных координатах: (0, r + p.height + p.jumpOffset)
 	rx := 0*cosT + (r+p.height+p.jumpOffset)*sinT
 	ry := -0*sinT + (r+p.height+p.jumpOffset)*cosT
 	return core.Vec3{
@@ -286,4 +285,28 @@ func (p *Player) SetTextureRight(texture *ebiten.Image) {
 // SetTextureJump устанавливает текстуру прыжка для игрока
 func (p *Player) SetTextureJump(texture *ebiten.Image) {
 	p.textureJump = texture
+}
+
+// CollisionRadius возвращает радиус аппроксимирующей сферы для коллизий.
+func (p *Player) CollisionRadius() float64 {
+	return math.Max(p.width, p.height) / 2.0
+}
+
+// SpriteCenter возвращает мировые координаты центра спрайта игрока,
+// учитывая наклон, дрифт, прыжок и положение на бревне.
+func (p *Player) SpriteCenter() core.Vec3 {
+	r := p.standingRadius
+	theta := p.balance / p.maxBalance * p.maxTiltAngle
+	// Ограничение угла (на всякий случай)
+	if theta > p.maxTiltAngle {
+		theta = p.maxTiltAngle
+	} else if theta < -p.maxTiltAngle {
+		theta = -p.maxTiltAngle
+	}
+	effectiveR := r + p.jumpOffset
+	return core.Vec3{
+		X: p.position.X + (effectiveR+p.height/2)*math.Sin(theta),
+		Y: p.position.Y + (effectiveR+p.height/2)*math.Cos(theta),
+		Z: p.position.Z,
+	}
 }

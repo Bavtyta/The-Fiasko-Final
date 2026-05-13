@@ -3,6 +3,7 @@ package state
 import (
 	"fmt"
 	"image/color"
+	"math"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
@@ -54,7 +55,7 @@ func NewGameState(manager *Manager, gameCfg config.GameConfig, cameraCfg config.
 	// Загружаем текстуру бревна
 	logTexture := asset.LoadLogTexture()
 
-	logLayer := world.NewSegmentLayer(0, -20, 10, 40, 1.0, 20, 0.0, 0.30, color.RGBA{139, 69, 19, 255}, world.SurfaceSolid)
+	logLayer := world.NewSegmentLayer(0, -20, 10, 35, 1.0, 20, 0.0, 0.30, color.RGBA{139, 69, 19, 255}, world.SurfaceSolid)
 	logLayer.SetTexture(logTexture) // Устанавливаем текстуру для слоя
 	for _, seg := range logLayer.Segments() {
 		seg.SetHeight(seg.Width())
@@ -122,17 +123,37 @@ func (g *GameState) Update() error {
 		g.player.Jump(2.3)
 	}
 
-	g.player.Update(g.world, delta)
+	g.player.Update(g.world) // Исправленный вызов без delta
 
 	// Проверка столкновений с препятствиями
+	const collisionZThreshold = 5.0
+	playerCenter := g.player.SpriteCenter()
+	playerRadius := g.player.CollisionRadius()
+	collided := false
 
-	if !g.player.IsFalling() {
-		g.score += 10.0 / 60.0
-	} else {
-		gameOver := NewGameOverState(g.manager, g.score, g.gameConfig)
-		g.manager.ChangeState(gameOver, nil)
+	for _, obs := range g.world.Obstacles() {
+		obsCenter := obs.SpriteCenter()
+		if math.Abs(playerCenter.Z-obsCenter.Z) > collisionZThreshold {
+			continue
+		}
+		dx := playerCenter.X - obsCenter.X
+		dy := playerCenter.Y - obsCenter.Y
+		dz := playerCenter.Z - obsCenter.Z
+		distSq := dx*dx + dy*dy + dz*dz
+		sumR := playerRadius + obs.Radius()
+		if distSq < sumR*sumR {
+			collided = true
+			break
+		}
 	}
 
+	if collided || g.player.IsFalling() {
+		gameOver := NewGameOverState(g.manager, g.score, g.gameConfig)
+		g.manager.ChangeState(gameOver, nil)
+		return nil
+	}
+
+	g.score += 10.0 / 60.0
 	return nil
 }
 
