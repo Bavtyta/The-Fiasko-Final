@@ -31,8 +31,8 @@ func GetManager() *Manager {
 		instance = &Manager{
 			achievements: []*Achievement{
 				{
-					ID:   "first_score",
-					Name: "Первые шаги",
+					ID:   "smile_face",
+					Name: "СМАЙЛ ФЕЙС)))",
 					Condition: func(score, balance float64, jumps int, distance float64) bool {
 						return score >= 5
 					},
@@ -41,7 +41,7 @@ func GetManager() *Manager {
 					ID:   "score_20",
 					Name: "Начинающий",
 					Condition: func(score, balance float64, jumps int, distance float64) bool {
-						return score >= 20
+						return score >= 250
 					},
 				},
 				{
@@ -52,15 +52,15 @@ func GetManager() *Manager {
 					},
 				},
 				{
-					ID:   "ТЫ РЕАЛЬНО 67 БРАТАН",
-					Name: "Попрыгунчик",
+					ID:   "jump_67",
+					Name: "ТЫ РЕАЛЬНО 67 БРАТАН",
 					Condition: func(score, balance float64, jumps int, distance float64) bool {
 						return jumps >= 67
 					},
 				},
 				{
-					ID:   "balance_king",
-					Name: "Король равновесия",
+					ID:   "denchik_slaziet",
+					Name: "ДЭНЧИК СЛАЗИЕТ",
 					Condition: func(score, balance float64, jumps int, distance float64) bool {
 						return balance < 5 && score > 30 // баланс почти идеален
 					},
