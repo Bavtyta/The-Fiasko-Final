@@ -26,17 +26,20 @@ func main() {
 	// Инициализируем звуковой менеджер
 	soundMgr := audio.GetSoundManager()
 
-	// Пытаемся загрузить и запустить музыку
-	musicReader, err := asset.LoadMusicTrack()
+	trackCount, err := asset.LoadAllMusicTracks()
 	if err != nil {
-		// Логируем ошибку, но не паникуем. Игра продолжит работу без фоновой музыки.
-		log.Printf("Warning: could not load music track: %v", err)
+		log.Printf("Warning: could not load music tracks: %v", err)
 	} else {
-		// Музыка загружена, пытаемся её проиграть
-		if err := soundMgr.PlayMusic(musicReader); err != nil {
-			log.Printf("Warning: could not play music: %v", err)
-		} else {
-			log.Printf("Info: Music started playing")
+		tracks := make([][]byte, 0, trackCount)
+		for i := 0; i < trackCount; i++ {
+			data, err := asset.GetMusicTrackData(i)
+			if err == nil {
+				tracks = append(tracks, data)
+			}
+		}
+		soundMgr.SetPlaylist(tracks)
+		if err := soundMgr.PlayCurrentTrack(); err != nil {
+			log.Printf("Warning: could not play first track: %v", err)
 		}
 	}
 

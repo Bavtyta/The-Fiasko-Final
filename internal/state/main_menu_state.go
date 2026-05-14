@@ -1,6 +1,8 @@
 package state
 
 import (
+	"log"
+
 	"TheFiaskoTest/internal/asset"
 	"TheFiaskoTest/internal/audio"
 	"TheFiaskoTest/internal/config"
@@ -96,6 +98,13 @@ func (m *MainMenuState) Update() error {
 	}
 	if m.shouldExit {
 		return ebiten.Termination
+	}
+
+	soundMgr := audio.GetSoundManager()
+	if soundMgr.IsMusicFinished() {
+		if err := soundMgr.NextTrack(); err != nil {
+			log.Printf("Warning: could not auto-advance track: %v", err)
+		}
 	}
 	return nil
 }

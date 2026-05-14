@@ -1,6 +1,8 @@
 package state
 
 import (
+	"log"
+
 	"TheFiaskoTest/internal/asset"
 	"TheFiaskoTest/internal/audio"
 	"TheFiaskoTest/internal/config"
@@ -89,6 +91,13 @@ func (g *GameOverState) Update() error {
 		case 2: // ГЛАВНОЕ МЕНЮ
 			mainMenu := NewMainMenuState(g.manager, g.gameConfig)
 			g.manager.ChangeState(mainMenu, nil)
+		}
+	}
+
+	soundMgr := audio.GetSoundManager()
+	if soundMgr.IsMusicFinished() {
+		if err := soundMgr.NextTrack(); err != nil {
+			log.Printf("Warning: could not auto-advance track: %v", err)
 		}
 	}
 	return nil

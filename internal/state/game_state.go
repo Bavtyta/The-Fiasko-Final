@@ -3,6 +3,7 @@ package state
 import (
 	"fmt"
 	"image/color"
+	"log"
 	"math"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -158,6 +159,14 @@ func (g *GameState) Update() error {
 		g.manager.ChangeState(pauseState, nil)
 		return nil // важно: прекращаем обновление игры на этом кадре
 	}
+
+	if inpututil.IsKeyJustPressed(ebiten.KeyN) {
+		soundMgr := audio.GetSoundManager()
+		if err := soundMgr.NextTrack(); err != nil {
+			log.Printf("Warning: could not switch track: %v", err)
+		}
+	}
+
 	g.world.Update(delta)
 
 	if g.score >= g.gameConfig.DriftThreshold {
@@ -239,6 +248,13 @@ func (g *GameState) Update() error {
 		g.hintAlpha -= 0.02 // скорость затухания (~3 секунды при 60 FPS)
 		if g.hintAlpha < 0 {
 			g.hintAlpha = 0
+		}
+	}
+
+	soundMgr := audio.GetSoundManager()
+	if soundMgr.IsMusicFinished() {
+		if err := soundMgr.NextTrack(); err != nil {
+			log.Printf("Warning: could not auto-advance track: %v", err)
 		}
 	}
 

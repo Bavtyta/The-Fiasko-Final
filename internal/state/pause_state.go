@@ -18,6 +18,7 @@ type PauseState struct {
 	gameState    *GameState // сохранённое игровое состояние
 	gameConfig   config.GameConfig
 	background   *ebiten.Image
+	overlay      *ebiten.Image // один раз на время паузы; не создавать каждый кадр в Draw
 	menuItems    []string
 	selectedIdx  int
 	buttonWidth  float32
@@ -83,9 +84,10 @@ func (p *PauseState) Update() error {
 func (p *PauseState) Draw(screen *ebiten.Image) {
 	// Рисуем фон и затемнение
 	uicommon.DrawBackground(screen, p.background, p.gameConfig.ScreenWidth, p.gameConfig.ScreenHeight)
-	overlay := ebiten.NewImage(p.gameConfig.ScreenWidth, p.gameConfig.ScreenHeight)
-	overlay.Fill(color.RGBA{0, 0, 0, 180})
-	screen.DrawImage(overlay, nil)
+	if p.overlay != nil {
+		p.overlay.Fill(color.RGBA{0, 0, 0, 180})
+		screen.DrawImage(p.overlay, nil)
+	}
 
 	uicommon.DrawTitle(screen, "PAUSE", 100, p.gameConfig.ScreenWidth)
 
@@ -96,6 +98,25 @@ func (p *PauseState) Draw(screen *ebiten.Image) {
 
 func (p *PauseState) Enter(prevState State, data interface{}) {
 	p.selectedIdx = 0
+	p.ensurePauseOverlay()
 }
 
-func (p *PauseState) Exit() {}
+func (p *PauseState) Exit() {
+	if p.overlay != nil {
+		p.overlay.Dispose()
+		p.overlay = nil
+	}
+}
+
+func (p *PauseState) ensurePauseOverlay() {
+	w, h := p.gameConfig.ScreenWidth, p.gameConfig.ScreenHeight
+	if p.overlay != nil {
+		b := p.overlay.Bounds()
+		if b.Dx() == w && b.Dy() == h {
+			return
+		}
+		p.overlay.Dispose()
+		p.overlay = nil
+	}
+	p.overlay = ebiten.NewImage(w, h)
+}
