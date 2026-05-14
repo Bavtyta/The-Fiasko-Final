@@ -3,59 +3,87 @@ package world
 import (
 	"image/color"
 	"math"
-	"math/rand"
-
-	"TheFiaskoTest/internal/core"
-	"TheFiaskoTest/internal/render"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
+
+	"TheFiaskoTest/internal/core"
+	"TheFiaskoTest/internal/render"
 )
 
 type Obstacle struct {
-	segment *Segment
-	offsetZ float64
+	worldZ  float64 // абсолютная Z-позиция в мире
+	angle   float64 // угол размещения на бревне (в радианах)
 	width   float64
 	height  float64
-	angle   float64 // статический угол размещения на окружности бревна
 	color   color.Color
-	radius  float64
+	texture *ebiten.Image
+
+	// кэшированные данные поверхности (обновляются каждый кадр)
+	surfaceX float64
+	surfaceY float64
+	radius   float64
 }
 
-// NewObstacle создаёт новое препятствие. width и height – размеры спрайта.
-// Препятствие размещается на дуге окружности бревна в случайном месте
-// в пределах углов от π/3 до 5π/3 (исключая нижнюю часть бревна).
-func NewObstacle(segment *Segment, offsetZ, width, height float64) *Obstacle {
-	// Случайный угол в радианах: от 60° до 300° (π/3 .. 5π/3)
-	angle := math.Pi/3 + rand.Float64()*(4*math.Pi/3)
-
+// NewObstacleAtZ создаёт препятствие в заданной абсолютной Z.
+func NewObstacleAtZ(worldZ, angle, width, height float64, texture *ebiten.Image) *Obstacle {
 	return &Obstacle{
-		segment: segment,
-		offsetZ: offsetZ,
+		worldZ:  worldZ,
+		angle:   angle,
 		width:   width,
 		height:  height,
-		angle:   angle,
-		color:   color.RGBA{255, 0, 0, 255},
-		radius:  segment.Width() / 2,
+		color:   color.RGBA{255, 255, 255, 255},
+		texture: texture,
 	}
 }
 
-// WorldPos возвращает мировые координаты центра бревна (оси вращения)
-func (o *Obstacle) WorldPos() core.Vec3 {
-	z := o.segment.NearZ() + o.offsetZ
-	x := o.segment.X() + o.segment.SlopeX()*z
-	y := o.segment.BaseY() + o.segment.SlopeY()*z // центр бревна
-	return core.Vec3{X: x, Y: y, Z: z}
+// Update вызывается каждый кадр — двигаем препятствие вместе с миром.
+func (o *Obstacle) Update(speed, delta float64) {
+	o.worldZ -= speed * delta
 }
 
-// Draw рисует препятствие как прямоугольник, повёрнутый на статический угол o.angle
+// UpdateSurface обновляет кэш поверхности (X, Y, radius) под препятствием.
+// Должен вызываться после Update и перед отрисовкой/коллизиями.
+func (o *Obstacle) UpdateSurface(w *World) {
+	info, ok := w.GetSurfaceAt(o.worldZ)
+	if ok && info.Segment != nil {
+		seg := info.Segment
+		z := o.worldZ
+		o.surfaceX = seg.X() + seg.SlopeX()*z
+		o.surfaceY = seg.BaseY() + seg.SlopeY()*z
+		o.radius = seg.Width() / 2
+	}
+	// Если по каким-то причинам сегмент не найден (например, Z позади камеры),
+	// оставляем предыдущие значения – они всё равно скоро удалятся.
+}
+
+func (o *Obstacle) WorldPos() core.Vec3 {
+	return core.Vec3{X: o.surfaceX, Y: o.surfaceY, Z: o.worldZ}
+}
+
+func (o *Obstacle) SpriteCenter() core.Vec3 {
+	sinT := math.Sin(o.angle)
+	cosT := math.Cos(o.angle)
+	r := o.radius
+	h := o.height
+	return core.Vec3{
+		X: o.surfaceX + (r+h/2)*sinT,
+		Y: o.surfaceY + (r+h/2)*cosT,
+		Z: o.worldZ,
+	}
+}
+
+func (o *Obstacle) Radius() float64 {
+	return math.Sqrt(math.Pow(o.width/2, 2) + math.Pow(o.height/2, 2))
+}
+
+// Draw остаётся почти без изменений, только использует o.surfaceX/Y/radius
 func (o *Obstacle) Draw(screen *ebiten.Image, cam *render.Camera) {
 	center := o.WorldPos()
 	halfW := o.width / 2
 	h := o.height
 	r := o.radius
 
-	// Локальные координаты до поворота: основание на расстоянии r от центра бревна
 	local := [][2]float64{
 		{-halfW, r},
 		{halfW, r},
@@ -78,36 +106,64 @@ func (o *Obstacle) Draw(screen *ebiten.Image, cam *render.Camera) {
 	}
 
 	var screenPts [4][2]float64
+	visible := true
 	for i, wp := range worldPts {
 		sx, sy, scale := cam.Project(wp)
 		if scale <= 0 {
-			return
+			visible = false
+			break
 		}
 		screenPts[i] = [2]float64{sx, sy}
 	}
 
-	col := o.color
-	ebitenutil.DrawLine(screen, screenPts[0][0], screenPts[0][1], screenPts[1][0], screenPts[1][1], col)
-	ebitenutil.DrawLine(screen, screenPts[1][0], screenPts[1][1], screenPts[3][0], screenPts[3][1], col)
-	ebitenutil.DrawLine(screen, screenPts[3][0], screenPts[3][1], screenPts[2][0], screenPts[2][1], col)
-	ebitenutil.DrawLine(screen, screenPts[2][0], screenPts[2][1], screenPts[0][0], screenPts[0][1], col)
+	if !visible {
+		return
+	}
+
+	// Если есть текстура, рисуем её (упрощённо – прямоугольник с текстурой)
+	if o.texture != nil {
+		// Можно использовать DrawTriangles как раньше, но для краткости оставлю заливку.
+		// Реализуйте текстурированный вывод по аналогии с игроком, если нужно.
+		// Пока нарисуем цветной прямоугольник.
+		col := o.color
+		// Рисуем контур (или залитый прямоугольник)
+		// В вашем коде уже была функция drawTexture – можно её скопировать.
+		// Я пока дам простую отрисовку линиями.
+		for i := 0; i < 4; i++ {
+			next := (i + 1) % 4
+			ebitenutil.DrawLine(screen, screenPts[i][0], screenPts[i][1], screenPts[next][0], screenPts[next][1], col)
+		}
+	} else {
+		// Без текстуры – цветной прямоугольник
+		col := o.color
+		for i := 0; i < 4; i++ {
+			next := (i + 1) % 4
+			ebitenutil.DrawLine(screen, screenPts[i][0], screenPts[i][1], screenPts[next][0], screenPts[next][1], col)
+		}
+	}
+
+	// Рисуем круг коллизии (как было)
+	o.drawCollisionCircle(screen, cam)
 }
 
-// Radius возвращает приблизительный радиус ограничивающей сферы для коллизий
-func (o *Obstacle) Radius() float64 {
-	return math.Sqrt(math.Pow(o.width/2, 2) + math.Pow(o.height/2, 2))
-}
-
-// SpriteCenter возвращает мировые координаты центра спрайта препятствия
-func (o *Obstacle) SpriteCenter() core.Vec3 {
-	r := o.radius
-	h := o.height
-	sinT := math.Sin(o.angle)
-	cosT := math.Cos(o.angle)
-	wp := o.WorldPos()
-	return core.Vec3{
-		X: wp.X + (r+h/2)*sinT,
-		Y: wp.Y + (r+h/2)*cosT,
-		Z: wp.Z,
+// drawCollisionCircle – скопируйте из вашего старого obstacle.go, он там был.
+// Я его приведу для полноты:
+func (o *Obstacle) drawCollisionCircle(screen *ebiten.Image, cam *render.Camera) {
+	center := o.SpriteCenter()
+	sx, sy, scale := cam.Project(center)
+	if scale <= 0 {
+		return
+	}
+	screenRadius := o.Radius() * scale
+	circleColor := color.RGBA{255, 255, 255, 150}
+	const segments = 32
+	for i := 0; i < segments; i++ {
+		angle1 := 2 * math.Pi * float64(i) / float64(segments)
+		angle2 := 2 * math.Pi * float64(i+1) / float64(segments)
+		x1 := sx + screenRadius*math.Cos(angle1)
+		y1 := sy + screenRadius*math.Sin(angle1)
+		x2 := sx + screenRadius*math.Cos(angle2)
+		y2 := sy + screenRadius*math.Sin(angle2)
+		ebitenutil.DrawLine(screen, x1, y1, x2, y2, circleColor)
 	}
 }

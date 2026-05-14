@@ -3,14 +3,21 @@ package world
 import (
 	"math"
 	"math/rand"
+	"sync"
 
 	"github.com/hajimehoshi/ebiten/v2"
 
+	"TheFiaskoTest/internal/asset"
 	"TheFiaskoTest/internal/common"
 	"TheFiaskoTest/internal/render"
 )
 
-const maxActiveObstacles = 100
+const maxActiveObstacles = 6
+
+var (
+	sugrobTexture     *ebiten.Image
+	sugrobTextureOnce sync.Once
+)
 
 type Layer interface {
 	Update(ctx common.WorldContext, delta float64)
@@ -23,95 +30,121 @@ type SurfaceProvider interface {
 }
 
 type World struct {
-	worldOffsetZ float64
-	speed        float64
-
+	worldOffsetZ  float64
+	speed         float64
+	initialSpeed  float64
+	score         float64
 	layers        []Layer
 	obstacles     []*Obstacle
-	baseSpawnDist float64 // базовое расстояние между препятствиями (в единицах Z)
-	lastSpawnZ    float64 // последняя позиция Z, где было создано препятствие
-}
-
-func (w *World) AddLayer(l Layer) {
-	w.layers = append(w.layers, l)
+	baseSpawnDist float64
+	lastSpawnZ    float64
 }
 
 func New(speed float64) *World {
 	return &World{
 		worldOffsetZ:  0,
 		speed:         speed,
-		baseSpawnDist: 75.0,
-		lastSpawnZ:    0.0,
+		initialSpeed:  speed,
+		score:         0,
+		baseSpawnDist: 50.0,
+		lastSpawnZ:    -1, // -1 означает "ещё не инициализировано"
 		layers:        []Layer{},
 		obstacles:     []*Obstacle{},
 	}
 }
 
+// AddObstacle добавляет препятствие в мир
 func (w *World) AddObstacle(obs *Obstacle) {
 	w.obstacles = append(w.obstacles, obs)
 }
 
-// spawnObstacle создаёт новое препятствие на самом дальнем твёрдом сегменте.
-func (w *World) spawnObstacle() {
-	var farthestSeg *Segment
-	maxZ := -math.MaxFloat64
+// getSugrobTexture возвращает текстуру сугроба (ленивая загрузка)
+func getSugrobTexture() *ebiten.Image {
+	sugrobTextureOnce.Do(func() {
+		sugrobTexture = asset.LoadSugrobTexture()
+	})
+	return sugrobTexture
+}
 
-	// Ищем самый дальний сегмент среди всех слоёв с твёрдой поверхностью
-	for _, layer := range w.layers {
-		if sl, ok := layer.(*SegmentLayer); ok && sl.SurfaceType() == SurfaceSolid {
-			for _, seg := range sl.Segments() {
-				segZ := seg.NearZ() + seg.Length()
-				if segZ > maxZ {
-					maxZ = segZ
-					farthestSeg = seg
-				}
-			}
-		}
+// effectiveSpawnDist возвращает дистанцию между препятствиями в единицах Z.
+// Плотность по времени постоянна: чем выше скорость, тем больше дистанция.
+func (w *World) effectiveSpawnDist() float64 {
+	if w.initialSpeed == 0 {
+		return w.baseSpawnDist
 	}
+	return w.baseSpawnDist * (w.speed / w.initialSpeed)
+}
 
-	if farthestSeg == nil {
-		return
+// initialSpawnOffset возвращает абсолютную Z для первого препятствия:
+// середина первого сегмента твёрдого слоя + 100 единиц.
+func (w *World) initialSpawnOffset(solidLayer *SegmentLayer) float64 {
+	segs := solidLayer.Segments()
+	if len(segs) == 0 {
+		return 0
 	}
-
-	// Случайная позиция вдоль сегмента с отступами
-	const margin = 5.0
-	segLength := farthestSeg.Length()
-	var offsetZ float64
-	if segLength > 2*margin {
-		offsetZ = margin + rand.Float64()*(segLength-2*margin)
-	} else {
-		offsetZ = rand.Float64() * segLength
+	seg := segs[0] // первый (ближайший к камере) сегмент
+	if seg == nil {
+		return 0
 	}
+	midOfFirst := seg.NearZ() + seg.Length()/2
+	const extraOffset = 250.0
+	return midOfFirst + extraOffset
+}
 
-	// Создаём статичное препятствие (без вращения)
-	obs := NewObstacle(farthestSeg, offsetZ, 3, 5)
+// spawnObstacleAt создаёт препятствие на заданной абсолютной Z
+func (w *World) spawnObstacleAt(spawnZ float64) {
+	const minAngle = math.Pi * -60 / 180.0
+	const maxAngle = math.Pi * 60.0 / 180.0
+	angle := minAngle + rand.Float64()*(maxAngle-minAngle)
+
+	texture := getSugrobTexture()
+	obs := NewObstacleAtZ(spawnZ, angle, 5, 8, texture)
+	obs.UpdateSurface(w) // сразу кэшируем поверхность
 	w.AddObstacle(obs)
 }
 
 func (w *World) Update(delta float64) {
 	w.worldOffsetZ += w.speed * delta
 
-	// Обновляем слои
 	for _, layer := range w.layers {
 		layer.Update(w, delta)
 	}
 
-	// Препятствия статичны относительно своих брёвен, поэтому не обновляем их вращение.
-	// Но они перемещаются вместе с сегментами автоматически, так как их позиция
-	// вычисляется через segment.NearZ() при каждой отрисовке / запросе координат.
-
-	// Генерация новых препятствий по мере прохождения расстояния
-	maxSpawnsPerFrame := 10
-	spawnsThisFrame := 0
-	for w.worldOffsetZ-w.lastSpawnZ >= w.baseSpawnDist && spawnsThisFrame < maxSpawnsPerFrame {
-		if len(w.obstacles) < maxActiveObstacles {
-			w.spawnObstacle()
-		}
-		w.lastSpawnZ += w.baseSpawnDist
-		spawnsThisFrame++
+	// Обновляем позиции и поверхности всех препятствий
+	for _, obs := range w.obstacles {
+		obs.Update(w.speed, delta)
+		obs.UpdateSurface(w)
 	}
 
-	// Удаляем препятствия, которые полностью позади камеры
+	// Инициализация lastSpawnZ при первом вызове Update
+	if w.lastSpawnZ < 0 {
+		var solidLayer *SegmentLayer
+		for _, layer := range w.layers {
+			if sl, ok := layer.(*SegmentLayer); ok && sl.SurfaceType() == SurfaceSolid {
+				solidLayer = sl
+				break
+			}
+		}
+		if solidLayer != nil {
+			firstSpawnZ := w.initialSpawnOffset(solidLayer)
+			// Ставим lastSpawnZ так, чтобы первое препятствие создалось на firstSpawnZ
+			w.lastSpawnZ = firstSpawnZ - w.effectiveSpawnDist()
+		} else {
+			w.lastSpawnZ = 0
+		}
+	}
+
+	// Спавн новых препятствий
+	spawnDist := w.effectiveSpawnDist()
+	for w.worldOffsetZ-w.lastSpawnZ >= spawnDist {
+		targetZ := w.lastSpawnZ + spawnDist
+		if len(w.obstacles) < maxActiveObstacles {
+			w.spawnObstacleAt(targetZ)
+		}
+		w.lastSpawnZ = targetZ
+	}
+
+	// Удаляем препятствия, ушедшие за камеру (Z < -10)
 	var remaining []*Obstacle
 	for _, obs := range w.obstacles {
 		if obs.WorldPos().Z > -10 {
@@ -147,8 +180,11 @@ func (w *World) Layers() []Layer       { return w.layers }
 func (w *World) SetSpeed(speed float64)         { w.speed = speed }
 func (w *World) SetWorldOffsetZ(offset float64) { w.worldOffsetZ = offset }
 func (w *World) SetLayers(layers []Layer)       { w.layers = layers }
+func (w *World) SetScore(score float64) {
+	w.score = score
+}
 
-// SurfaceInfo и GetSurfaceAt остаются без изменений
+// SurfaceInfo и GetSurfaceAt
 type SurfaceInfo struct {
 	Height  float64
 	Type    SurfaceType
@@ -177,4 +213,8 @@ func (w *World) GetSurfaceAt(z float64) (SurfaceInfo, bool) {
 		}
 	}
 	return best, found
+}
+
+func (w *World) AddLayer(l Layer) {
+	w.layers = append(w.layers, l)
 }

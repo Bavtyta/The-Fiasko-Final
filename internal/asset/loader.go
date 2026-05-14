@@ -42,6 +42,16 @@ var riverTextureJPG []byte
 //go:embed image/background.png
 var backgroundTexturePNG []byte
 
+// Фон игрового уровня (PNG)
+//
+//go:embed image/game_background.png
+var gameBackgroundTexturePNG []byte
+
+// Текстура сугроба (PNG)
+//
+//go:embed image/Sugrob_png.png
+var sugrobTexturePNG []byte
+
 // LoadLogTexture загружает текстуру бревна (JPG)
 func LoadLogTexture() *ebiten.Image {
 	// Загружаем JPG текстуру
@@ -196,5 +206,40 @@ func LoadBackgroundTexture() *ebiten.Image {
 	log.Printf("Info: Using fallback green texture for background")
 	img := ebiten.NewImage(512, 512)
 	img.Fill(color.RGBA{34, 139, 34, 255})
+	return img
+}
+
+// LoadGameBackgroundTexture загружает текстуру фона во время игры (PNG)
+func LoadGameBackgroundTexture() *ebiten.Image {
+	if len(gameBackgroundTexturePNG) > 0 {
+		img, _, err := image.Decode(bytes.NewReader(gameBackgroundTexturePNG))
+		if err == nil {
+			log.Printf("Info: Loaded game background texture from embedded PNG")
+			return ebiten.NewImageFromImage(img)
+		}
+		log.Printf("Warning: Failed to load game background texture PNG: %v", err)
+	}
+
+	log.Printf("Info: Using fallback green texture for game background")
+	img := ebiten.NewImage(512, 512)
+	img.Fill(color.RGBA{34, 139, 34, 255})
+	return img
+}
+
+// LoadSugrobTexture загружает текстуру сугроба (PNG)
+func LoadSugrobTexture() *ebiten.Image {
+	if len(sugrobTexturePNG) > 0 {
+		img, _, err := image.Decode(bytes.NewReader(sugrobTexturePNG))
+		if err == nil {
+			log.Printf("Info: Loaded sugrob texture from embedded PNG")
+			return ebiten.NewImageFromImage(img)
+		}
+		log.Printf("Warning: Failed to load sugrob texture PNG: %v", err)
+	}
+
+	// Если не загрузился, создаём простую белую текстуру
+	log.Printf("Info: Using fallback white texture for sugrob")
+	img := ebiten.NewImage(32, 32)
+	img.Fill(color.White)
 	return img
 }

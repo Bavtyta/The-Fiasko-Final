@@ -1,6 +1,7 @@
 package state
 
 import (
+	"TheFiaskoTest/internal/audio"
 	"TheFiaskoTest/internal/config"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -26,6 +27,7 @@ func (m *Manager) Update() error {
 			m.current.Exit()
 		}
 		m.current = m.next
+		m.syncMusicVolumeForCurrentState()
 		m.current.Enter(nil, m.data)
 		m.next = nil
 		m.data = nil
@@ -43,6 +45,20 @@ func (m *Manager) Draw(screen *ebiten.Image) {
 func (m *Manager) ChangeState(state State, data interface{}) {
 	m.next = state
 	m.data = data
+}
+
+// syncMusicVolumeForCurrentState выставляет громкость музыки один раз при фактической смене состояния:
+// тихо везде, кроме активного геймплея (GameState).
+func (m *Manager) syncMusicVolumeForCurrentState() {
+	if m.current == nil {
+		return
+	}
+	switch m.current.(type) {
+	case *GameState:
+		audio.GetSoundManager().OnStateChange("game")
+	default:
+		audio.GetSoundManager().OnStateChange("menu")
+	}
 }
 
 // GameConfig возвращает конфигурацию игры

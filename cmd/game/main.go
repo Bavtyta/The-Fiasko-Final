@@ -7,6 +7,9 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 
+	"TheFiaskoTest/internal/asset"
+	"TheFiaskoTest/internal/audio"
+
 	"TheFiaskoTest/internal/config"
 	"TheFiaskoTest/internal/state"
 )
@@ -19,6 +22,23 @@ func main() {
 	manager := state.NewManager(nil, gameCfg) // временно nil
 	mainMenuState := state.NewMainMenuState(manager, gameCfg)
 	manager.ChangeState(mainMenuState, nil)
+
+	// Инициализируем звуковой менеджер
+	soundMgr := audio.GetSoundManager()
+
+	// Пытаемся загрузить и запустить музыку
+	musicReader, err := asset.LoadMusicTrack()
+	if err != nil {
+		// Логируем ошибку, но не паникуем. Игра продолжит работу без фоновой музыки.
+		log.Printf("Warning: could not load music track: %v", err)
+	} else {
+		// Музыка загружена, пытаемся её проиграть
+		if err := soundMgr.PlayMusic(musicReader); err != nil {
+			log.Printf("Warning: could not play music: %v", err)
+		} else {
+			log.Printf("Info: Music started playing")
+		}
+	}
 
 	game := &Game{manager: manager}
 
