@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"image/color"
 	"log"
-	"math"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hajimehoshi/ebiten/v2/text"
 
+	"TheFiaskoTest/internal/achievement"
 	"TheFiaskoTest/internal/asset"
 	"TheFiaskoTest/internal/audio"
 	"TheFiaskoTest/internal/config"
@@ -151,6 +151,12 @@ func (g *GameState) Update() error {
 				g.countdownAlpha = 0
 			}
 		}
+
+		// В конце Update (перед return nil)
+		achManager := achievement.GetManager()
+		achManager.UpdateStats(g.score, g.player.Balance(), 0, g.world.WorldOffsetZ())
+		// количество прыжков нужно увеличивать при прыжке:
+		// добавьте поле jumpCount в GameState и увеличивайте при g.player.Jump()
 		return nil
 	}
 
@@ -190,23 +196,13 @@ func (g *GameState) Update() error {
 
 	g.player.Update(g.world) // Исправленный вызов без delta
 
-	// Проверка столкновений с препятствиями
+	// Проверка столкновений с препятствиями (эллипс игрока × эллипс препятствия)
 	const collisionZThreshold = 5.0
-	playerCenter := g.player.SpriteCenter()
-	playerRadius := g.player.CollisionRadius()
+	pc, pSemiT, pSemiR, pAng := g.player.CollisionEllipse()
 	collided := false
 
 	for _, obs := range g.world.Obstacles() {
-		obsCenter := obs.SpriteCenter()
-		if math.Abs(playerCenter.Z-obsCenter.Z) > collisionZThreshold {
-			continue
-		}
-		dx := playerCenter.X - obsCenter.X
-		dy := playerCenter.Y - obsCenter.Y
-		dz := playerCenter.Z - obsCenter.Z
-		distSq := dx*dx + dy*dy + dz*dz
-		sumR := playerRadius + obs.Radius()
-		if distSq < sumR*sumR {
+		if obs.CollidesPlayerEllipse(pc.X, pc.Y, pc.Z, pSemiT, pSemiR, pAng, collisionZThreshold) {
 			collided = true
 			break
 		}

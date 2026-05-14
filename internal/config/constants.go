@@ -19,7 +19,7 @@ type GameConfig struct {
 	ScreenWidth          int
 	ScreenHeight         int
 	DriftThreshold       float64
-	ShowCollisionCircles bool // Показывать ли круги столкновения вокруг препятствий
+	ShowCollisionCircles bool // Отладка: контур зоны столкновения препятствий (эллипс)
 }
 
 // PhysicsConfig содержит конфигурационные константы для физики

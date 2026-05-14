@@ -73,8 +73,16 @@ func (o *Obstacle) SpriteCenter() core.Vec3 {
 	}
 }
 
-func (o *Obstacle) Radius() float64 {
-	return math.Sqrt(math.Pow(o.width/2, 2) + math.Pow(o.height/2, 2))
+// CollidesPlayerEllipse — столкновение эллипса игрока с эллипсом препятствия (оба в плоскости XY), порог по Z.
+func (o *Obstacle) CollidesPlayerEllipse(playerCX, playerCY, playerCZ, pSemiT, pSemiR, pAng float64, zThreshold float64) bool {
+	obsC := o.SpriteCenter()
+	if math.Abs(playerCZ-obsC.Z) > zThreshold {
+		return false
+	}
+	return orientedEllipsesOverlap(
+		playerCX, playerCY, pSemiT, pSemiR, pAng,
+		obsC.X, obsC.Y, o.width*0.5, o.height*0.5, o.angle,
+	)
 }
 
 // Draw остаётся почти без изменений, только использует o.surfaceX/Y/radius
@@ -120,21 +128,21 @@ func (o *Obstacle) Draw(screen *ebiten.Image, cam *render.Camera) {
 		return
 	}
 
-	// Если есть текстура, рисуем её (упрощённо – прямоугольник с текстурой)
 	if o.texture != nil {
-		// Можно использовать DrawTriangles как раньше, но для краткости оставлю заливку.
-		// Реализуйте текстурированный вывод по аналогии с игроком, если нужно.
-		// Пока нарисуем цветной прямоугольник.
-		col := o.color
-		// Рисуем контур (или залитый прямоугольник)
-		// В вашем коде уже была функция drawTexture – можно её скопировать.
-		// Я пока дам простую отрисовку линиями.
-		for i := 0; i < 4; i++ {
-			next := (i + 1) % 4
-			ebitenutil.DrawLine(screen, screenPts[i][0], screenPts[i][1], screenPts[next][0], screenPts[next][1], col)
+		bounds := o.texture.Bounds()
+		texW := float32(bounds.Dx())
+		texH := float32(bounds.Dy())
+		// Два треугольника с UV, как у игрока (квад в мировых координатах → экран)
+		vertices := []ebiten.Vertex{
+			{DstX: float32(screenPts[0][0]), DstY: float32(screenPts[0][1]), SrcX: 0, SrcY: texH, ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1},
+			{DstX: float32(screenPts[1][0]), DstY: float32(screenPts[1][1]), SrcX: texW, SrcY: texH, ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1},
+			{DstX: float32(screenPts[3][0]), DstY: float32(screenPts[3][1]), SrcX: texW, SrcY: 0, ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1},
+			{DstX: float32(screenPts[2][0]), DstY: float32(screenPts[2][1]), SrcX: 0, SrcY: 0, ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1},
 		}
+		indices := []uint16{0, 1, 2, 0, 2, 3}
+		opts := &ebiten.DrawTrianglesOptions{Filter: ebiten.FilterLinear}
+		screen.DrawTriangles(vertices, indices, o.texture, opts)
 	} else {
-		// Без текстуры – цветной прямоугольник
 		col := o.color
 		for i := 0; i < 4; i++ {
 			next := (i + 1) % 4
@@ -142,28 +150,27 @@ func (o *Obstacle) Draw(screen *ebiten.Image, cam *render.Camera) {
 		}
 	}
 
-	// Рисуем круг коллизии (как было)
-	o.drawCollisionCircle(screen, cam)
+	o.drawCollisionEllipse(screen, cam)
 }
 
-// drawCollisionCircle – скопируйте из вашего старого obstacle.go, он там был.
-// Я его приведу для полноты:
-func (o *Obstacle) drawCollisionCircle(screen *ebiten.Image, cam *render.Camera) {
-	center := o.SpriteCenter()
-	sx, sy, scale := cam.Project(center)
-	if scale <= 0 {
-		return
-	}
-	screenRadius := o.Radius() * scale
-	circleColor := color.RGBA{255, 255, 255, 150}
-	const segments = 32
+func (o *Obstacle) drawCollisionEllipse(screen *ebiten.Image, cam *render.Camera) {
+	c := o.SpriteCenter()
+	sinT, cosT := math.Sin(o.angle), math.Cos(o.angle)
+	semiT := o.width * 0.5
+	semiR := o.height * 0.5
+	lineColor := color.RGBA{255, 255, 255, 150}
+	const segments = 48
 	for i := 0; i < segments; i++ {
-		angle1 := 2 * math.Pi * float64(i) / float64(segments)
-		angle2 := 2 * math.Pi * float64(i+1) / float64(segments)
-		x1 := sx + screenRadius*math.Cos(angle1)
-		y1 := sy + screenRadius*math.Sin(angle1)
-		x2 := sx + screenRadius*math.Cos(angle2)
-		y2 := sy + screenRadius*math.Sin(angle2)
-		ebitenutil.DrawLine(screen, x1, y1, x2, y2, circleColor)
+		phi1 := 2 * math.Pi * float64(i) / float64(segments)
+		phi2 := 2 * math.Pi * float64(i+1) / float64(segments)
+		wx1 := c.X + semiT*math.Cos(phi1)*cosT + semiR*math.Sin(phi1)*sinT
+		wy1 := c.Y - semiT*math.Cos(phi1)*sinT + semiR*math.Sin(phi1)*cosT
+		wx2 := c.X + semiT*math.Cos(phi2)*cosT + semiR*math.Sin(phi2)*sinT
+		wy2 := c.Y - semiT*math.Cos(phi2)*sinT + semiR*math.Sin(phi2)*cosT
+		sx1, sy1, s1 := cam.Project(core.Vec3{X: wx1, Y: wy1, Z: c.Z})
+		sx2, sy2, s2 := cam.Project(core.Vec3{X: wx2, Y: wy2, Z: c.Z})
+		if s1 > 0 && s2 > 0 {
+			ebitenutil.DrawLine(screen, sx1, sy1, sx2, sy2, lineColor)
+		}
 	}
 }

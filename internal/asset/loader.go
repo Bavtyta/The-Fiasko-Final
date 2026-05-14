@@ -52,6 +52,11 @@ var gameBackgroundTexturePNG []byte
 //go:embed image/Sugrob_png.png
 var sugrobTexturePNG []byte
 
+// Текстура пенька для препятствий (PNG)
+//
+//go:embed image/Penek_Dlinny_1_1.png
+var stumpTexturePNG []byte
+
 // LoadLogTexture загружает текстуру бревна (JPG)
 func LoadLogTexture() *ebiten.Image {
 	// Загружаем JPG текстуру
@@ -223,6 +228,22 @@ func LoadGameBackgroundTexture() *ebiten.Image {
 	log.Printf("Info: Using fallback green texture for game background")
 	img := ebiten.NewImage(512, 512)
 	img.Fill(color.RGBA{34, 139, 34, 255})
+	return img
+}
+
+// LoadStumpTexture загружает текстуру пенька для препятствий (PNG)
+func LoadStumpTexture() *ebiten.Image {
+	if len(stumpTexturePNG) > 0 {
+		img, _, err := image.Decode(bytes.NewReader(stumpTexturePNG))
+		if err == nil {
+			log.Printf("Info: Loaded stump texture from embedded PNG")
+			return ebiten.NewImageFromImage(img)
+		}
+		log.Printf("Warning: Failed to load stump texture PNG: %v", err)
+	}
+	log.Printf("Info: Using fallback brown texture for stump")
+	img := ebiten.NewImage(64, 64)
+	img.Fill(color.RGBA{90, 55, 30, 255})
 	return img
 }
 

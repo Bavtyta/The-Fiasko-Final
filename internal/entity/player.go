@@ -152,19 +152,24 @@ func (p *Player) ApplyBalanceInput(driftDir int, delta float64) {
 	}
 }
 
+// tiltAngle угол наклона спрайта в радианах (как в Draw), в диапазоне [-maxTiltAngle, maxTiltAngle].
+func (p *Player) tiltAngle() float64 {
+	f := p.balance / p.maxBalance
+	if f < -1 {
+		f = -1
+	} else if f > 1 {
+		f = 1
+	}
+	return f * p.maxTiltAngle
+}
+
 // Draw отрисовывает игрока с учётом наклона (вращение вокруг центра нижней стороны).
 func (p *Player) Draw(screen *ebiten.Image, cam *render.Camera, ctx common.WorldContext) {
 	if p.isFalling {
 		return
 	}
 
-	factor := p.balance / p.maxBalance
-	if factor < -1 {
-		factor = -1
-	} else if factor > 1 {
-		factor = 1
-	}
-	theta := factor * p.maxTiltAngle
+	theta := p.tiltAngle()
 
 	halfW := p.width / 2
 	h := p.height
@@ -235,8 +240,8 @@ func (p *Player) Draw(screen *ebiten.Image, cam *render.Camera, ctx common.World
 		ebitenutil.DrawLine(screen, screenPts[2][0], screenPts[2][1], screenPts[0][0], screenPts[0][1], col)
 	}
 
-	// Рисуем круг зоны столкновения для игрока
-	p.drawCollisionCircle(screen, cam)
+	// Рисуем эллипс зоны столкновения
+	p.drawCollisionEllipse(screen, cam)
 }
 
 // TiltedUpperWorldPos возвращает мировые координаты центра верхней грани после наклона.
@@ -244,13 +249,7 @@ func (p *Player) TiltedUpperWorldPos() core.Vec3 {
 	if p.isFalling {
 		return core.Vec3{}
 	}
-	factor := p.balance / p.maxBalance
-	if factor < -1 {
-		factor = -1
-	} else if factor > 1 {
-		factor = 1
-	}
-	theta := factor * p.maxTiltAngle
+	theta := p.tiltAngle()
 	cosT := math.Cos(theta)
 	sinT := math.Sin(theta)
 
@@ -304,59 +303,37 @@ func (p *Player) SetTextureJump(texture *ebiten.Image) {
 	p.textureJump = texture
 }
 
-// CollisionRadius возвращает радиус аппроксимирующей сферы для коллизий.
-func (p *Player) CollisionRadius() float64 {
-	// Фиксированный радиус 6, как requested
-	return 6.0
+// collisionEllipseSemiAxes полуось по ширине (касательная к бревну) и по высоте (радиально).
+// Ширина зоны в три раза уже прежней (полуось width/6 вместо width/2), высота как у спрайта.
+func (p *Player) collisionEllipseSemiAxes() (semiT, semiR float64) {
+	return p.width / 6, p.height * 0.5
 }
 
-// drawCollisionCircle рисует круг зоны столкновения вокруг игрока
-func (p *Player) drawCollisionCircle(screen *ebiten.Image, cam *render.Camera) {
-	// Получаем центр круга столкновения в мировых координатах
-	center := p.CollisionCircleCenter()
+// CollisionEllipse задаёт эллипс столкновения: центр как у спрайта, полуоси и угол наклона.
+func (p *Player) CollisionEllipse() (core.Vec3, float64, float64, float64) {
+	semiT, semiR := p.collisionEllipseSemiAxes()
+	return p.SpriteCenter(), semiT, semiR, p.tiltAngle()
+}
 
-	// Проецируем центр на экран
-	sx, sy, scale := cam.Project(center)
-	if scale <= 0 {
-		return
-	}
-
-	// Вычисляем радиус столкновения в мировых координатах
-	collisionRadius := p.CollisionRadius()
-
-	// Масштабируем радиус для экранных координат
-	screenRadius := collisionRadius * scale
-
-	// Цвет круга: зеленый с прозрачностью для игрока
-	circleColor := color.RGBA{0, 255, 0, 150} // Зеленый для игрока
-
-	// Рисуем круг с помощью нескольких линий (аппроксимация круга)
-	const segments = 32
+func (p *Player) drawCollisionEllipse(screen *ebiten.Image, cam *render.Camera) {
+	c := p.SpriteCenter()
+	theta := p.tiltAngle()
+	sinT, cosT := math.Sin(theta), math.Cos(theta)
+	semiT, semiR := p.collisionEllipseSemiAxes()
+	lineColor := color.RGBA{0, 255, 0, 150}
+	const segments = 48
 	for i := 0; i < segments; i++ {
-		angle1 := 2 * math.Pi * float64(i) / float64(segments)
-		angle2 := 2 * math.Pi * float64(i+1) / float64(segments)
-
-		x1 := sx + screenRadius*math.Cos(angle1)
-		y1 := sy + screenRadius*math.Sin(angle1)
-		x2 := sx + screenRadius*math.Cos(angle2)
-		y2 := sy + screenRadius*math.Sin(angle2)
-
-		ebitenutil.DrawLine(screen, x1, y1, x2, y2, circleColor)
-	}
-
-	// Также рисуем тонкий контур для лучшей видимости
-	outlineColor := color.RGBA{0, 255, 0, 255} // Полностью зеленый
-	const outlineSegments = 32
-	for i := 0; i < outlineSegments; i++ {
-		angle1 := 2 * math.Pi * float64(i) / float64(outlineSegments)
-		angle2 := 2 * math.Pi * float64(i+1) / float64(outlineSegments)
-
-		x1 := sx + (screenRadius+0.5)*math.Cos(angle1) // Немного больше радиуса
-		y1 := sy + (screenRadius+0.5)*math.Sin(angle1)
-		x2 := sx + (screenRadius+0.5)*math.Cos(angle2)
-		y2 := sy + (screenRadius+0.5)*math.Sin(angle2)
-
-		ebitenutil.DrawLine(screen, x1, y1, x2, y2, outlineColor)
+		phi1 := 2 * math.Pi * float64(i) / float64(segments)
+		phi2 := 2 * math.Pi * float64(i+1) / float64(segments)
+		wx1 := c.X + semiT*math.Cos(phi1)*cosT + semiR*math.Sin(phi1)*sinT
+		wy1 := c.Y - semiT*math.Cos(phi1)*sinT + semiR*math.Sin(phi1)*cosT
+		wx2 := c.X + semiT*math.Cos(phi2)*cosT + semiR*math.Sin(phi2)*sinT
+		wy2 := c.Y - semiT*math.Cos(phi2)*sinT + semiR*math.Sin(phi2)*cosT
+		sx1, sy1, s1 := cam.Project(core.Vec3{X: wx1, Y: wy1, Z: c.Z})
+		sx2, sy2, s2 := cam.Project(core.Vec3{X: wx2, Y: wy2, Z: c.Z})
+		if s1 > 0 && s2 > 0 {
+			ebitenutil.DrawLine(screen, sx1, sy1, sx2, sy2, lineColor)
+		}
 	}
 }
 
@@ -364,40 +341,11 @@ func (p *Player) drawCollisionCircle(screen *ebiten.Image, cam *render.Camera) {
 // учитывая наклон, дрифт, прыжок и положение на бревне.
 func (p *Player) SpriteCenter() core.Vec3 {
 	r := p.standingRadius
-	theta := p.balance / p.maxBalance * p.maxTiltAngle
-	// Ограничение угла (на всякий случай)
-	if theta > p.maxTiltAngle {
-		theta = p.maxTiltAngle
-	} else if theta < -p.maxTiltAngle {
-		theta = -p.maxTiltAngle
-	}
+	theta := p.tiltAngle()
 	effectiveR := r + p.jumpOffset
 	return core.Vec3{
 		X: p.position.X + (effectiveR+p.height/2)*math.Sin(theta),
 		Y: p.position.Y + (effectiveR+p.height/2)*math.Cos(theta),
-		Z: p.position.Z,
-	}
-}
-
-// CollisionCircleCenter возвращает мировые координаты центра круга столкновения.
-// Центр расположен так, что нижняя точка круга совпадает с нижней границей текстуры игрока.
-func (p *Player) CollisionCircleCenter() core.Vec3 {
-	r := p.standingRadius
-	theta := p.balance / p.maxBalance * p.maxTiltAngle
-	// Ограничение угла (на всякий случай)
-	if theta > p.maxTiltAngle {
-		theta = p.maxTiltAngle
-	} else if theta < -p.maxTiltAngle {
-		theta = -p.maxTiltAngle
-	}
-	effectiveR := r + p.jumpOffset
-	collisionRadius := p.CollisionRadius()
-
-	// Центр круга находится на высоте (effectiveR + collisionRadius) от центра бревна
-	// чтобы нижняя точка круга была на уровне effectiveR
-	return core.Vec3{
-		X: p.position.X + (effectiveR+collisionRadius)*math.Sin(theta),
-		Y: p.position.Y + (effectiveR+collisionRadius)*math.Cos(theta),
 		Z: p.position.Z,
 	}
 }

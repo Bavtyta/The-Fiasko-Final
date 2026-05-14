@@ -15,8 +15,8 @@ import (
 const maxActiveObstacles = 6
 
 var (
-	sugrobTexture     *ebiten.Image
-	sugrobTextureOnce sync.Once
+	stumpTexture     *ebiten.Image
+	stumpTextureOnce sync.Once
 )
 
 type Layer interface {
@@ -58,12 +58,12 @@ func (w *World) AddObstacle(obs *Obstacle) {
 	w.obstacles = append(w.obstacles, obs)
 }
 
-// getSugrobTexture возвращает текстуру сугроба (ленивая загрузка)
-func getSugrobTexture() *ebiten.Image {
-	sugrobTextureOnce.Do(func() {
-		sugrobTexture = asset.LoadSugrobTexture()
+// getStumpTexture возвращает текстуру пенька для препятствий (ленивая загрузка)
+func getStumpTexture() *ebiten.Image {
+	stumpTextureOnce.Do(func() {
+		stumpTexture = asset.LoadStumpTexture()
 	})
-	return sugrobTexture
+	return stumpTexture
 }
 
 // effectiveSpawnDist возвращает дистанцию между препятствиями в единицах Z.
@@ -97,7 +97,7 @@ func (w *World) spawnObstacleAt(spawnZ float64) {
 	const maxAngle = math.Pi * 60.0 / 180.0
 	angle := minAngle + rand.Float64()*(maxAngle-minAngle)
 
-	texture := getSugrobTexture()
+	texture := getStumpTexture()
 	obs := NewObstacleAtZ(spawnZ, angle, 5, 8, texture)
 	obs.UpdateSurface(w) // сразу кэшируем поверхность
 	w.AddObstacle(obs)

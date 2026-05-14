@@ -89,9 +89,10 @@ func (m *MainMenuState) Update() error {
 				config.DefaultSpeedConfig())
 			m.manager.ChangeState(gameState, nil)
 		case 1:
-			// TODO: настройки
-		case 2:
-			// TODO: достижения
+		// TODO: настройки
+		case 2: // ДОСТИЖЕНИЯ
+			achievementsState := NewAchievementsState(m.manager, m.gameConfig)
+			m.manager.ChangeState(achievementsState, nil)
 		case 3:
 			m.shouldExit = true
 		}
