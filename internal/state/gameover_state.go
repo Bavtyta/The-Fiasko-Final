@@ -88,6 +88,9 @@ func (g *GameOverState) Update() error {
 				config.DefaultPhysicsConfig(),
 				config.DefaultSpeedConfig())
 			g.manager.ChangeState(gameState, nil)
+		case 1: // НАСТРОЙКИ
+			settingsState := NewSettingsState(g.manager, g.gameConfig, g) // возврат в game over
+			g.manager.ChangeState(settingsState, nil)
 		case 2: // ГЛАВНОЕ МЕНЮ
 			mainMenu := NewMainMenuState(g.manager, g.gameConfig)
 			g.manager.ChangeState(mainMenu, nil)

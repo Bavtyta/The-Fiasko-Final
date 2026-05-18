@@ -71,7 +71,7 @@ func DefaultPhysicsConfig() PhysicsConfig {
 func DefaultSpeedConfig() SpeedConfig {
 	return SpeedConfig{
 		InitialSpeed:          50.0,
-		MaxSpeed:              150.0,
-		SpeedIncreasePerScore: 0.05,
+		MaxSpeed:              200.0,
+		SpeedIncreasePerScore: 0.15,
 	}
 }

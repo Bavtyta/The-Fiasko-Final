@@ -53,29 +53,47 @@ func (p *PauseState) updateButtonPositions() {
 }
 
 func (p *PauseState) Update() error {
+	keyPressed := false
+
+	// Навигация
 	if inpututil.IsKeyJustPressed(ebiten.KeyArrowUp) || inpututil.IsKeyJustPressed(ebiten.KeyW) {
 		p.selectedIdx = (p.selectedIdx - 1 + len(p.menuItems)) % len(p.menuItems)
+		keyPressed = true
 	}
 	if inpututil.IsKeyJustPressed(ebiten.KeyArrowDown) || inpututil.IsKeyJustPressed(ebiten.KeyS) {
 		p.selectedIdx = (p.selectedIdx + 1) % len(p.menuItems)
+		keyPressed = true
 	}
+
+	// Звук навигации
+	if keyPressed {
+		if snd, err := asset.LoadKeypressSound(); err == nil {
+			audio.GetSoundManager().PlayEffect(snd)
+		}
+	}
+
+	// Обработка выбора
 	if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
-		// звук нажатия
 		if snd, err := asset.LoadKeypressSound(); err == nil {
 			audio.GetSoundManager().PlayEffect(snd)
 		}
 		switch p.selectedIdx {
 		case 0: // ПРОДОЛЖИТЬ
 			p.manager.ChangeState(p.gameState, "resume")
-		case 1: // НАСТРОЙКИ (заглушка – пока возвращаем в паузу)
-			// В будущем здесь будет SettingsState
+		case 1: // НАСТРОЙКИ
+			settingsState := NewSettingsState(p.manager, p.gameConfig, p)
+			p.manager.ChangeState(settingsState, nil)
 		case 2: // ГЛАВНОЕ МЕНЮ
 			mainMenu := NewMainMenuState(p.manager, p.gameConfig)
 			p.manager.ChangeState(mainMenu, nil)
 		}
 	}
+
 	// Escape тоже выходит из паузы
 	if inpututil.IsKeyJustPressed(ebiten.KeyEscape) {
+		if snd, err := asset.LoadKeypressSound(); err == nil {
+			audio.GetSoundManager().PlayEffect(snd)
+		}
 		p.manager.ChangeState(p.gameState, "resume")
 	}
 	return nil

@@ -150,7 +150,7 @@ func (o *Obstacle) Draw(screen *ebiten.Image, cam *render.Camera) {
 		}
 	}
 
-	o.drawCollisionEllipse(screen, cam)
+	// o.drawCollisionEllipse(screen, cam) // Закомментировано: отрисовка границ коллизий
 }
 
 func (o *Obstacle) drawCollisionEllipse(screen *ebiten.Image, cam *render.Camera) {

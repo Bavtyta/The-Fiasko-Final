@@ -26,6 +26,7 @@ func main() {
 	// Инициализируем звуковой менеджер
 	soundMgr := audio.GetSoundManager()
 
+	// Загружаем музыку
 	trackCount, err := asset.LoadAllMusicTracks()
 	if err != nil {
 		log.Printf("Warning: could not load music tracks: %v", err)
@@ -38,9 +39,26 @@ func main() {
 			}
 		}
 		soundMgr.SetPlaylist(tracks)
-		if err := soundMgr.PlayCurrentTrack(); err != nil {
-			log.Printf("Warning: could not play first track: %v", err)
+	}
+
+	// Загружаем истории
+	storyCount, err := asset.LoadAllStories()
+	if err != nil {
+		log.Printf("Warning: could not load stories: %v", err)
+	} else {
+		stories := make([][]byte, 0, storyCount)
+		for i := 0; i < storyCount; i++ {
+			data, err := asset.GetStoryData(i)
+			if err == nil {
+				stories = append(stories, data)
+			}
 		}
+		soundMgr.SetStories(stories)
+	}
+
+	// Запускаем текущий трек (в зависимости от режима)
+	if err := soundMgr.PlayCurrentTrack(); err != nil {
+		log.Printf("Warning: could not play current track: %v", err)
 	}
 
 	game := &Game{manager: manager}

@@ -55,7 +55,7 @@ func GetManager() *Manager {
 					ID:   "jump_67",
 					Name: "ТЫ РЕАЛЬНО 67 БРАТАН",
 					Condition: func(score, balance float64, jumps int, distance float64) bool {
-						return jumps >= 67
+						return jumps >= 2
 					},
 				},
 				{
@@ -101,6 +101,16 @@ func (m *Manager) Reset() {
 	for _, ach := range m.achievements {
 		ach.Unlocked = false
 	}
+	m.score = 0
+	m.balance = 0
+	m.jumps = 0
+	m.distance = 0
+}
+
+// ResetStats сбрасывает только статистики (score, balance, jumps, distance), но не разблокированные достижения
+func (m *Manager) ResetStats() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.score = 0
 	m.balance = 0
 	m.jumps = 0

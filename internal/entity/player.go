@@ -241,7 +241,7 @@ func (p *Player) Draw(screen *ebiten.Image, cam *render.Camera, ctx common.World
 	}
 
 	// Рисуем эллипс зоны столкновения
-	p.drawCollisionEllipse(screen, cam)
+	// p.drawCollisionEllipse(screen, cam) // Закомментировано: отрисовка границ коллизий
 }
 
 // TiltedUpperWorldPos возвращает мировые координаты центра верхней грани после наклона.

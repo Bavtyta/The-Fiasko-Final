@@ -12,7 +12,7 @@ type SoundConfig struct {
 func DefaultSoundConfig() SoundConfig {
 	return SoundConfig{
 		MusicVolumeMenu:   0.2,
-		MusicVolumeGame:   1.0,
+		MusicVolumeGame:   1,
 		EffectsVolume:     0.8,
 		CountdownDuration: 3.0,
 	}

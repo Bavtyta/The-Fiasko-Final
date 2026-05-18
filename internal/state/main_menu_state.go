@@ -88,8 +88,9 @@ func (m *MainMenuState) Update() error {
 				config.DefaultPhysicsConfig(),
 				config.DefaultSpeedConfig())
 			m.manager.ChangeState(gameState, nil)
-		case 1:
-		// TODO: настройки
+		case 1: // НАСТРОЙКИ
+			settingsState := NewSettingsState(m.manager, m.gameConfig, m)
+			m.manager.ChangeState(settingsState, nil)
 		case 2: // ДОСТИЖЕНИЯ
 			achievementsState := NewAchievementsState(m.manager, m.gameConfig)
 			m.manager.ChangeState(achievementsState, nil)

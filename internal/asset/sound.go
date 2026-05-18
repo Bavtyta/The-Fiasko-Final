@@ -16,8 +16,14 @@ var MusicFolder = "asset/music"
 // SoundsFolder – путь к папке со звуками
 var SoundsFolder = "asset/sounds"
 
+// StoriesFolder – путь к папке с историями
+var StoriesFolder = "asset/storyes"
+
 // allMusicData хранит все MP3 в памяти (порядок — отсортированные имена файлов).
 var allMusicData [][]byte
+
+// allStoriesData хранит все истории MP3 в памяти
+var allStoriesData [][]byte
 
 // LoadAllMusicTracks загружает все MP3 из MusicFolder в память.
 // Возвращает количество успешно загруженных треков или ошибку, если нет ни одного.
@@ -57,6 +63,45 @@ func GetMusicTrackData(index int) ([]byte, error) {
 // GetMusicTrackCount возвращает количество загруженных треков.
 func GetMusicTrackCount() int {
 	return len(allMusicData)
+}
+
+// LoadAllStories загружает все истории из StoriesFolder в память.
+func LoadAllStories() (int, error) {
+	pattern := filepath.Join(StoriesFolder, "*.mp3")
+	files, err := filepath.Glob(pattern)
+	if err != nil {
+		return 0, err
+	}
+	if len(files) == 0 {
+		return 0, fmt.Errorf("no story MP3 files found in %s", StoriesFolder)
+	}
+	sort.Strings(files)
+
+	allStoriesData = nil
+	for _, f := range files {
+		data, err := os.ReadFile(f)
+		if err != nil {
+			continue
+		}
+		allStoriesData = append(allStoriesData, data)
+	}
+	if len(allStoriesData) == 0 {
+		return 0, fmt.Errorf("no valid story MP3 files could be read from %s", StoriesFolder)
+	}
+	return len(allStoriesData), nil
+}
+
+// GetStoryData возвращает данные истории по индексу.
+func GetStoryData(index int) ([]byte, error) {
+	if index < 0 || index >= len(allStoriesData) {
+		return nil, fmt.Errorf("story index %d out of range [0..%d]", index, len(allStoriesData)-1)
+	}
+	return allStoriesData[index], nil
+}
+
+// GetStoryCount возвращает количество загруженных историй.
+func GetStoryCount() int {
+	return len(allStoriesData)
 }
 
 // LoadMusicTrack возвращает первый трек как ReadSeeker (после LoadAllMusicTracks — из памяти).

@@ -12,7 +12,7 @@ import (
 	"TheFiaskoTest/internal/render"
 )
 
-const maxActiveObstacles = 6
+const maxActiveObstacles = 10
 
 var (
 	stumpTexture     *ebiten.Image
@@ -46,8 +46,8 @@ func New(speed float64) *World {
 		speed:         speed,
 		initialSpeed:  speed,
 		score:         0,
-		baseSpawnDist: 50.0,
-		lastSpawnZ:    -1, // -1 означает "ещё не инициализировано"
+		baseSpawnDist: 50.0, // Уменьшили с 50.0 до 35.0 для более частого спавна
+		lastSpawnZ:    -1,   // -1 означает "ещё не инициализировано"
 		layers:        []Layer{},
 		obstacles:     []*Obstacle{},
 	}
@@ -72,7 +72,14 @@ func (w *World) effectiveSpawnDist() float64 {
 	if w.initialSpeed == 0 {
 		return w.baseSpawnDist
 	}
-	return w.baseSpawnDist * (w.speed / w.initialSpeed)
+	// Увеличиваем дистанцию пропорционально скорости, но с ограничением
+	// чтобы препятствия не становились слишком редкими
+	speedRatio := w.speed / w.initialSpeed
+	// Ограничиваем множитель дистанции (максимум в 2 раза от базовой)
+	if speedRatio > 2.0 {
+		speedRatio = 2.0
+	}
+	return w.baseSpawnDist * speedRatio
 }
 
 // initialSpawnOffset возвращает абсолютную Z для первого препятствия:
@@ -98,7 +105,8 @@ func (w *World) spawnObstacleAt(spawnZ float64) {
 	angle := minAngle + rand.Float64()*(maxAngle-minAngle)
 
 	texture := getStumpTexture()
-	obs := NewObstacleAtZ(spawnZ, angle, 5, 8, texture)
+	// Уменьшили размер препятствий для более динамичной игры
+	obs := NewObstacleAtZ(spawnZ, angle, 6.5, 10, texture)
 	obs.UpdateSurface(w) // сразу кэшируем поверхность
 	w.AddObstacle(obs)
 }

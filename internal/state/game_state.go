@@ -28,6 +28,7 @@ type GameState struct {
 	player      *entity.Player
 	balanceBar  *ui.BalanceBarLayer
 	score       float64
+	jumpCount   int // счетчик прыжков в текущей игре
 	driftDir    int // 1 - вправо, -1 - влево
 	gameConfig  config.GameConfig
 	speedConfig config.SpeedConfig
@@ -42,6 +43,9 @@ type GameState struct {
 }
 
 func NewGameState(manager *Manager, gameCfg config.GameConfig, cameraCfg config.CameraConfig, physicsCfg config.PhysicsConfig, speedCfg config.SpeedConfig) *GameState {
+	// Сбрасываем статистики достижений при начале новой игры
+	achievement.GetManager().ResetStats()
+
 	w := world.New(speedCfg.InitialSpeed)
 
 	skyLayer := world.NewSkyLayer(gameCfg.ScreenWidth, 300, 0.1)
@@ -106,6 +110,7 @@ func NewGameState(manager *Manager, gameCfg config.GameConfig, cameraCfg config.
 		player:      player,
 		balanceBar:  balanceBar,
 		score:       0,
+		jumpCount:   0, // инициализируем счетчик прыжков
 		driftDir:    1,
 		gameConfig:  gameCfg,
 		speedConfig: speedCfg,
@@ -152,11 +157,6 @@ func (g *GameState) Update() error {
 			}
 		}
 
-		// В конце Update (перед return nil)
-		achManager := achievement.GetManager()
-		achManager.UpdateStats(g.score, g.player.Balance(), 0, g.world.WorldOffsetZ())
-		// количество прыжков нужно увеличивать при прыжке:
-		// добавьте поле jumpCount в GameState и увеличивайте при g.player.Jump()
 		return nil
 	}
 
@@ -164,13 +164,6 @@ func (g *GameState) Update() error {
 		pauseState := NewPauseState(g.manager, g, g.gameConfig)
 		g.manager.ChangeState(pauseState, nil)
 		return nil // важно: прекращаем обновление игры на этом кадре
-	}
-
-	if inpututil.IsKeyJustPressed(ebiten.KeyN) {
-		soundMgr := audio.GetSoundManager()
-		if err := soundMgr.NextTrack(); err != nil {
-			log.Printf("Warning: could not switch track: %v", err)
-		}
 	}
 
 	g.world.Update(delta)
@@ -192,6 +185,7 @@ func (g *GameState) Update() error {
 
 	if inpututil.IsKeyJustPressed(ebiten.KeyW) {
 		g.player.Jump(2.3)
+		g.jumpCount++ // увеличиваем счетчик прыжков
 	}
 
 	g.player.Update(g.world) // Исправленный вызов без delta
@@ -253,6 +247,10 @@ func (g *GameState) Update() error {
 			log.Printf("Warning: could not auto-advance track: %v", err)
 		}
 	}
+
+	// Обновляем статистики достижений
+	achManager := achievement.GetManager()
+	achManager.UpdateStats(g.score, g.player.Balance(), g.jumpCount, g.world.WorldOffsetZ())
 
 	return nil
 }
