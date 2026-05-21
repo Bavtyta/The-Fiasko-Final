@@ -55,14 +55,14 @@ func GetManager() *Manager {
 					ID:   "jump_67",
 					Name: "ТЫ РЕАЛЬНО 67 БРАТАН",
 					Condition: func(score, balance float64, jumps int, distance float64) bool {
-						return jumps >= 2
+						return jumps >= 67
 					},
 				},
 				{
 					ID:   "denchik_slaziet",
 					Name: "ДЭНЧИК СЛАЗИЕТ",
 					Condition: func(score, balance float64, jumps int, distance float64) bool {
-						return balance < 5 && score > 30 // баланс почти идеален
+						return balance > 9.5 && score > 1000 // баланс почти идеален
 					},
 				},
 			},
